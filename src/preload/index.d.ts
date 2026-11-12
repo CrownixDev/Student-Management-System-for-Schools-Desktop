@@ -1,8 +1,18 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import { ServerStatus } from "@/types";
 
 declare global {
   interface Window {
-    electron: ElectronAPI
-    api: unknown
+    api: {
+      server: {
+        start: () => Promise<ServerStatus>;
+        stop: () => Promise<ServerStatus>;
+        restart: () => Promise<ServerStatus>;
+        getStatus: () => Promise<ServerStatus>;
+
+        onStatusChange: (
+          callback: (status: ServerStatus) => void,
+        ) => () => void;
+      };
+    };
   }
 }

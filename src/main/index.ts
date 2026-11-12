@@ -1,74 +1,154 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
+import { createSystemWindow, closeSystemWindow } from "./windows/system-window";
+import { app, BrowserWindow, Menu } from "electron";
+import { createManagerWindow } from "./windows/manager-window";
+import { registerServerIPC } from "./ipc/server-ipc";
+import { ServerManager } from "./services/server-manager";
+import { APP_MODE } from "@/constraints";
 
-function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
+const isDevelopment = !app.isPackaged;
+const serverManager = new ServerManager();
+let isQuitting = false;
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
+// --------------------------------------------------
+// Application menu
+// --------------------------------------------------
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
+function createApplicationMenu() {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: "Crownix",
+      submenu: [
+        {
+          label: "System",
+          click: () => {
+            if (serverManager.getStatus() === "running") {
+              createSystemWindow(serverManager.getBaseUrl());
+            }
+          },
+        },
+        {
+          label: "Server Manager",
+          click: () => {
+            createManagerWindow();
+          },
+        },
+        { type: "separator" },
+        {
+          role: "quit",
+        },
+      ],
+    },
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { type: "separator" },
+        ...(isDevelopment
+          ? [
+              { role: "toggleDevTools" as const },
+              { type: "separator" as const },
+              { role: "resetZoom" as const },
+              { role: "zoomIn" as const },
+              { role: "zoomOut" as const },
+              { type: "separator" as const },
+            ]
+          : []),
+
+        { role: "togglefullscreen" },
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+// --------------------------------------------------
+// Server status handling
+// --------------------------------------------------
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
+serverManager.onStatusChange((status) => {
+  if (APP_MODE === "client") {
+    if (status === "running") {
+      createSystemWindow(serverManager.getBaseUrl());
+    }
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
-  createWindow()
-
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
+    if (status === "stopped" || status === "stopping" || status === "error") {
+      closeSystemWindow();
+    }
   }
-})
+});
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+// --------------------------------------------------
+// Application startup
+// --------------------------------------------------
+
+app.whenReady().then(async () => {
+  registerServerIPC(serverManager);
+
+  createApplicationMenu();
+
+  if (APP_MODE === "server") {
+    createManagerWindow();
+  }
+
+  try {
+    await serverManager.start();
+  } catch (error) {
+    console.error("Application startup failed:", error);
+    createManagerWindow();
+  }
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      if (APP_MODE === "server") {
+        createManagerWindow();
+      } else if (serverManager.getStatus() === "running") {
+        createSystemWindow(serverManager.getBaseUrl());
+      } else {
+        createManagerWindow();
+      }
+    }
+  });
+});
+
+// --------------------------------------------------
+// Application shutdown
+// --------------------------------------------------
+
+app.on("before-quit", (event) => {
+  if (isQuitting) return;
+
+  event.preventDefault();
+
+  isQuitting = true;
+
+  serverManager
+    .stop()
+    .catch((error) => {
+      console.error("Server shutdown failed:", error);
+    })
+    .finally(() => {
+      app.quit();
+    });
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
