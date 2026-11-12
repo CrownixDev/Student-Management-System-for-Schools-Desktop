@@ -34,7 +34,7 @@ function createApplicationMenu() {
             const manager = serverManager;
 
             if (manager?.getStatus() === "running") {
-              createSystemWindow(manager.getBaseUrl());
+              createSystemWindow(manager.getLocalUrl());
             }
           },
         },
@@ -97,7 +97,7 @@ function createApplicationMenu() {
 function registerServerStatusListener(manager: ServerManager) {
   manager.onStatusChange((status) => {
     if (manager.getMode() === "client" && status === "running") {
-      createSystemWindow(manager.getBaseUrl());
+      createSystemWindow(manager.getLocalUrl());
     }
 
     if (status === "stopped" || status === "stopping" || status === "error") {
@@ -177,7 +177,7 @@ app.on("activate", () => {
   if (manager.getMode() === "server") {
     createManagerWindow();
   } else if (manager.getStatus() === "running") {
-    createSystemWindow(manager.getBaseUrl());
+    createSystemWindow(manager.getLocalUrl());
   } else {
     createManagerWindow();
   }

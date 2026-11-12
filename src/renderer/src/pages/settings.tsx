@@ -11,6 +11,8 @@ import {
 import { ServerIcon, MonitorIcon, CheckCircle2Icon } from "lucide-react";
 import { cn } from "cn";
 import type { AppMode } from "../../../types/app-config";
+import { getErrorMessage } from "@renderer/lib/utils";
+import { toast } from "react-toastify";
 
 export default function SettingsPage() {
   const [mode, setMode] = useState<AppMode>("client");
@@ -33,13 +35,15 @@ export default function SettingsPage() {
   const handleModeChange = async (value: unknown) => {
     const newMode = String(value) as AppMode;
     if (newMode !== "server" && newMode !== "client") return;
-    setMode(newMode);
+
     try {
       setIsUpdating(true);
       await window.api.settings.setMode(newMode);
       setSaveSuccess(true);
+      setMode(newMode);
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to update app mode"));
       console.error("Failed to update app mode:", err);
     } finally {
       setIsUpdating(false);
@@ -107,14 +111,10 @@ export default function SettingsPage() {
                       <span className="text-sm font-semibold text-foreground">
                         Client Mode
                       </span>
-                      <span className="rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-[10px] font-semibold">
-                        Default
-                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      Launches the full interactive student management desktop
-                      window directly for daily staff operations and
-                      administration.
+                      Launches the student management desktop window directly
+                      when starting the application
                     </p>
                   </div>
                 </label>
@@ -142,9 +142,8 @@ export default function SettingsPage() {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      Runs the application primarily as a headless or dedicated
-                      host. Opens directly into this server management control
-                      dashboard.
+                      Runs the application primarily as a dedicated host. Opens
+                      directly into this server management control dashboard.
                     </p>
                   </div>
                 </label>

@@ -1,4 +1,4 @@
-import { SERVER_PORT, HEALTH_INTERVAL, HEALTH_TIMEOUT } from "@/constraints";
+import { HEALTH_INTERVAL, HEALTH_TIMEOUT } from "@/constraints";
 import { listBackups, pruneBackups } from "./storage-manager";
 import { spawn, type ChildProcess } from "node:child_process";
 import { AppConfig, ServerStatus } from "@/types";
@@ -14,7 +14,6 @@ export class ServerManager {
   private statusListeners = new Set<(status: ServerStatus) => void>();
 
   private config: AppConfig;
-  private baseUrl = `http://127.0.0.1:${SERVER_PORT}`;
   private readonly internalToken = randomBytes(32).toString("hex");
 
   private logs: ServerLog[] = [];
@@ -46,10 +45,6 @@ export class ServerManager {
 
   getStatus(): ServerStatus {
     return this.status;
-  }
-
-  getBaseUrl(): string {
-    return this.baseUrl;
   }
 
   onStatusChange(listener: (status: ServerStatus) => void) {
@@ -97,8 +92,6 @@ export class ServerManager {
 
     try {
       const { nodePath, serverPath } = this.getServerPaths();
-
-      this.baseUrl = `http://127.0.0.1:${SERVER_PORT}`;
 
       const child = spawn(nodePath, [serverPath], {
         cwd: path.dirname(serverPath),
@@ -249,7 +242,7 @@ export class ServerManager {
       }
 
       try {
-        const response = await fetch(`${this.baseUrl}/api/health`, {
+        const response = await fetch(`${this.getLocalUrl()}/api/health`, {
           signal: AbortSignal.timeout(2000),
         });
 

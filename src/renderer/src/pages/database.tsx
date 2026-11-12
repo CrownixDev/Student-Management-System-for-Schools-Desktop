@@ -16,10 +16,10 @@ import {
   ClockIcon,
   ArchiveIcon,
   FileArchiveIcon,
-  AlertTriangleIcon,
 } from "lucide-react";
 import { getErrorMessage } from "@renderer/lib/utils";
 import { StorageInfo } from "../../../types";
+import { toast } from "react-toastify";
 
 function formatBytes(bytes: number, decimals = 2) {
   if (bytes === 0) return "0 Bytes";
@@ -34,16 +34,14 @@ export default function DatabasePage() {
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isBackingUp, setIsBackingUp] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchInfo = async () => {
     try {
-      setErrorMsg(null);
       const info = await window.api.storage.getInfo();
       setStorageInfo(info);
     } catch (err: unknown) {
       console.error("Failed to load storage info:", err);
-      setErrorMsg(getErrorMessage(err, "Failed to load database storage info"));
+      toast.error(getErrorMessage(err, "Failed to load database storage info"));
     } finally {
       setIsLoading(false);
     }
@@ -56,25 +54,23 @@ export default function DatabasePage() {
 
   const handleChangeDbDir = async () => {
     try {
-      setErrorMsg(null);
       const res = await window.api.storage.selectDatabaseDirectory();
       if (res) {
         await fetchInfo();
       }
     } catch (err: unknown) {
-      setErrorMsg(getErrorMessage(err, "Failed to change database directory"));
+      toast.error(getErrorMessage(err, "Failed to change database directory"));
     }
   };
 
   const handleChangeBackupDir = async () => {
     try {
-      setErrorMsg(null);
       const res = await window.api.storage.selectBackupDirectory();
       if (res) {
         await fetchInfo();
       }
     } catch (err: unknown) {
-      setErrorMsg(getErrorMessage(err, "Failed to change backup directory"));
+      toast.error(getErrorMessage(err, "Failed to change backup directory"));
     }
   };
 
@@ -97,11 +93,11 @@ export default function DatabasePage() {
   const handleCreateBackup = async () => {
     try {
       setIsBackingUp(true);
-      setErrorMsg(null);
+
       await window.api.storage.createBackup();
       await fetchInfo();
     } catch (err: unknown) {
-      setErrorMsg(getErrorMessage(err, "Failed to create backup"));
+      toast.error(getErrorMessage(err, "Failed to create backup"));
     } finally {
       setIsBackingUp(false);
     }
@@ -139,13 +135,6 @@ export default function DatabasePage() {
 
       <PageLayoutContent className="flex-1 p-8">
         <div className="mx-auto max-w-3xl flex flex-col gap-6">
-          {errorMsg && (
-            <div className="flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-              <AlertTriangleIcon className="size-4 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
           {/* Directory Configuration Card */}
           <Card className="border border-border/80 bg-card/60 backdrop-blur-xs shadow-xs">
             <CardContent className="p-6 flex flex-col gap-5">

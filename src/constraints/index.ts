@@ -1,4 +1,3 @@
-export const SERVER_PORT = 3223;
 export const HEALTH_TIMEOUT = 30_000;
 export const HEALTH_INTERVAL = 500;
 export const DATABASE_FILENAME = "student-management.db";

@@ -68,6 +68,11 @@ export function registerServerIPC(
     ipcMain.handle(
       IPC_NAMES.settings.setMode,
       async (_event, newMode: AppMode) => {
+        if (serverManager.getStatus() !== "stopped") {
+          throw new Error(
+            "You cannot change the application mode while server running.",
+          );
+        }
         if (newMode !== "server" && newMode !== "client") {
           throw new Error("Invalid application mode.");
         }
