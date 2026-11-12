@@ -14,8 +14,8 @@ export function createManagerWindow() {
   managerWindow = new BrowserWindow({
     width: 1100,
     height: 750,
-    minWidth: 800,
-    minHeight: 600,
+    minWidth: 1100,
+    minHeight: 750,
 
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),

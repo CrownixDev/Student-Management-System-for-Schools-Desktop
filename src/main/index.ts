@@ -86,10 +86,9 @@ serverManager.onStatusChange((status) => {
     if (status === "running") {
       createSystemWindow(serverManager.getBaseUrl());
     }
-
-    if (status === "stopped" || status === "stopping" || status === "error") {
-      closeSystemWindow();
-    }
+  }
+  if (status === "stopped" || status === "stopping" || status === "error") {
+    closeSystemWindow();
   }
 });
 
