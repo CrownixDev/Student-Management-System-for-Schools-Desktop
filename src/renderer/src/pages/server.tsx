@@ -5,6 +5,10 @@ import {
   ServerIcon,
   Loader2Icon,
   AlertCircleIcon,
+  CopyIcon,
+  CheckIcon,
+  GlobeIcon,
+  LaptopIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -14,6 +18,7 @@ import {
 import { Button } from "@renderer/components/shadcn/button";
 import { Card, CardContent } from "@renderer/components/shadcn/card";
 import { cn } from "cn";
+import type { ServerInfo } from "../../../types";
 
 type ServerStatus = "stopped" | "starting" | "running" | "stopping" | "error";
 
@@ -67,17 +72,89 @@ const statusConfig: Record<
   },
 };
 
+function UrlItem({
+  label,
+  url,
+  icon: Icon,
+}: {
+  label: string;
+  url: string;
+  icon: typeof LaptopIcon;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3.5 py-2.5 transition-colors hover:bg-muted/40">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Icon className="size-3.5" />
+        </div>
+        <div className="min-w-0">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block leading-tight">
+            {label}
+          </span>
+          <span className="text-xs font-mono font-medium text-foreground truncate block mt-0.5 select-all">
+            {url}
+          </span>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={handleCopy}
+        title="Copy URL"
+        className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+      >
+        {copied ? (
+          <CheckIcon className="size-3.5 text-emerald-500" />
+        ) : (
+          <CopyIcon className="size-3.5" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
 export default function ServerPage() {
   const [status, setStatus] = useState<ServerStatus>("stopped");
+  const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [isActionPending, setIsActionPending] = useState(false);
+
+  const refreshInfo = () => {
+    window.api.server
+      .getInfo()
+      .then((info) => {
+        setServerInfo(info);
+        if (info.status) {
+          setStatus(info.status);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load server info:", err);
+      });
+  };
 
   useEffect(() => {
     window.api.server.getStatus().then((s) => {
       setStatus((s as ServerStatus) ?? "stopped");
     });
+    refreshInfo();
+
     const cleanup = window.api.server.onStatusChange((s) => {
       setStatus((s as ServerStatus) ?? "stopped");
       setIsActionPending(false);
+      refreshInfo();
     });
     return cleanup;
   }, []);
@@ -86,6 +163,7 @@ export default function ServerPage() {
     try {
       setIsActionPending(true);
       await window.api.server.start();
+      refreshInfo();
     } catch {
       setIsActionPending(false);
     }
@@ -95,6 +173,7 @@ export default function ServerPage() {
     try {
       setIsActionPending(true);
       await window.api.server.stop();
+      refreshInfo();
     } catch {
       setIsActionPending(false);
     }
@@ -104,6 +183,7 @@ export default function ServerPage() {
     try {
       setIsActionPending(true);
       await window.api.server.restart();
+      refreshInfo();
     } catch {
       setIsActionPending(false);
     }
@@ -112,6 +192,13 @@ export default function ServerPage() {
   const current = statusConfig[status] ?? statusConfig.stopped;
   const isTransitioning =
     isActionPending || status === "starting" || status === "stopping";
+
+  // Derive network URLs from usableUrls excluding local 127.0.0.1
+  const localUrl =
+    serverInfo?.localUrl ?? `http://127.0.0.1:${serverInfo?.port ?? 3223}`;
+  const networkUrls = (serverInfo?.usableUrls ?? []).filter(
+    (u) => !u.includes("127.0.0.1") && !u.includes("localhost"),
+  );
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -178,25 +265,44 @@ export default function ServerPage() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Server Details Grid */}
-              <div className="mt-6 grid grid-cols-2 gap-3 pt-5 border-t border-border/60">
-                <div className="rounded-lg bg-muted/30 p-3 border border-border/40">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block">
-                    Port
-                  </span>
-                  <span className="text-sm font-semibold font-mono text-foreground mt-0.5 block">
-                    3223
-                  </span>
-                </div>
-                <div className="rounded-lg bg-muted/30 p-3 border border-border/40">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block">
-                    Target Address
-                  </span>
-                  <span className="text-sm font-semibold font-mono text-foreground mt-0.5 block">
-                    127.0.0.1:3223
-                  </span>
-                </div>
+          {/* Connection URLs Card */}
+          <Card className="border border-border/80 bg-card/60 backdrop-blur-xs shadow-xs">
+            <CardContent className="p-6">
+              <div className="mb-4">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Access URLs
+                </span>
+                <span className="text-xs text-muted-foreground/80 mt-0.5 block">
+                  Use these URLs to connect to the server interface
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <UrlItem
+                  label="Local Address"
+                  url={localUrl}
+                  icon={LaptopIcon}
+                />
+
+                {networkUrls.length > 0
+                  ? networkUrls.map((netUrl) => (
+                      <UrlItem
+                        key={netUrl}
+                        label="Network Address"
+                        url={netUrl}
+                        icon={GlobeIcon}
+                      />
+                    ))
+                  : serverInfo?.mode === "server" && (
+                      <div className="rounded-lg border border-dashed border-border/70 p-3 text-center">
+                        <p className="text-xs text-muted-foreground">
+                          No additional network IPv4 addresses detected.
+                        </p>
+                      </div>
+                    )}
               </div>
             </CardContent>
           </Card>
@@ -233,9 +339,7 @@ export default function ServerPage() {
                   variant="outline"
                   className="h-11 cursor-pointer font-medium gap-2"
                 >
-                  <RotateCcwIcon
-                    className={cn("size-4", isTransitioning && "animate-spin")}
-                  />
+                  <RotateCcwIcon className="size-4" />
                   Restart
                 </Button>
               </div>

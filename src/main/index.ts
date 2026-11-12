@@ -1,12 +1,22 @@
-import { createSystemWindow, closeSystemWindow } from "./windows/system-window";
 import { app, BrowserWindow, Menu } from "electron";
-import { createManagerWindow } from "./windows/manager-window";
+
+import { createSystemWindow, closeSystemWindow } from "./windows/system-window";
+
+import {
+  createManagerWindow,
+  getManagerWindow,
+} from "./windows/manager-window";
+
 import { registerServerIPC } from "./ipc/server-ipc";
+import { registerStorageIPC } from "./ipc/storage-ipc";
+
 import { ServerManager } from "./services/server-manager";
-import { APP_MODE } from "@/constraints";
+import { ConfigStore } from "./services/config-store";
+import { ensureDatabase } from "./services/database-recovery";
 
 const isDevelopment = !app.isPackaged;
-const serverManager = new ServerManager();
+
+let serverManager: ServerManager | null = null;
 let isQuitting = false;
 
 // --------------------------------------------------
@@ -21,8 +31,10 @@ function createApplicationMenu() {
         {
           label: "System",
           click: () => {
-            if (serverManager.getStatus() === "running") {
-              createSystemWindow(serverManager.getBaseUrl());
+            const manager = serverManager;
+
+            if (manager?.getStatus() === "running") {
+              createSystemWindow(manager.getBaseUrl());
             }
           },
         },
@@ -58,6 +70,7 @@ function createApplicationMenu() {
         { role: "reload" },
         { role: "forceReload" },
         { type: "separator" },
+
         ...(isDevelopment
           ? [
               { role: "toggleDevTools" as const },
@@ -81,48 +94,93 @@ function createApplicationMenu() {
 // Server status handling
 // --------------------------------------------------
 
-serverManager.onStatusChange((status) => {
-  if (APP_MODE === "client") {
-    if (status === "running") {
-      createSystemWindow(serverManager.getBaseUrl());
+function registerServerStatusListener(manager: ServerManager) {
+  manager.onStatusChange((status) => {
+    if (manager.getMode() === "client" && status === "running") {
+      createSystemWindow(manager.getBaseUrl());
     }
-  }
-  if (status === "stopped" || status === "stopping" || status === "error") {
-    closeSystemWindow();
-  }
-});
+
+    if (status === "stopped" || status === "stopping" || status === "error") {
+      closeSystemWindow();
+    }
+  });
+}
 
 // --------------------------------------------------
 // Application startup
 // --------------------------------------------------
 
 app.whenReady().then(async () => {
-  registerServerIPC(serverManager);
-
-  createApplicationMenu();
-
-  if (APP_MODE === "server") {
-    createManagerWindow();
-  }
-
   try {
-    await serverManager.start();
+    const configStore = new ConfigStore();
+    let config = await configStore.load();
+    const manager = new ServerManager(config);
+
+    serverManager = manager;
+
+    registerServerIPC(manager, configStore);
+    registerStorageIPC(manager, configStore);
+
+    registerServerStatusListener(manager);
+
+    createApplicationMenu();
+
+    // Server mode opens the manager as its primary window.
+    if (manager.getMode() === "server") {
+      createManagerWindow();
+    }
+
+    // Check database availability before starting Next.js.
+    const recoveredConfig = await ensureDatabase(
+      getManagerWindow(),
+      config,
+      configStore,
+    );
+
+    if (!recoveredConfig) {
+      // User cancelled database recovery.
+      createManagerWindow();
+      return;
+    }
+
+    config = recoveredConfig;
+    manager.updateConfig(config);
+
+    try {
+      await manager.start();
+    } catch (error) {
+      console.error("Could not start the application server:", error);
+      createManagerWindow();
+    }
   } catch (error) {
     console.error("Application startup failed:", error);
     createManagerWindow();
   }
+});
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      if (APP_MODE === "server") {
-        createManagerWindow();
-      } else if (serverManager.getStatus() === "running") {
-        createSystemWindow(serverManager.getBaseUrl());
-      } else {
-        createManagerWindow();
-      }
-    }
-  });
+// --------------------------------------------------
+// Application activation
+// --------------------------------------------------
+
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length !== 0) {
+    return;
+  }
+
+  const manager = serverManager;
+
+  if (!manager) {
+    createManagerWindow();
+    return;
+  }
+
+  if (manager.getMode() === "server") {
+    createManagerWindow();
+  } else if (manager.getStatus() === "running") {
+    createSystemWindow(manager.getBaseUrl());
+  } else {
+    createManagerWindow();
+  }
 });
 
 // --------------------------------------------------
@@ -132,11 +190,16 @@ app.whenReady().then(async () => {
 app.on("before-quit", (event) => {
   if (isQuitting) return;
 
+  const manager = serverManager;
+
+  // Allow Electron to quit normally if initialization hasn't completed.
+  if (!manager) return;
+
   event.preventDefault();
 
   isQuitting = true;
 
-  serverManager
+  manager
     .stop()
     .catch((error) => {
       console.error("Server shutdown failed:", error);
