@@ -1,10 +1,15 @@
 import { AppConfig } from "@/types";
+import { CONFIG_VERSION, DATABASE_FILENAME } from "@/constraints";
 import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 
 export class ConfigStore {
-  private configPath = path.join(app.getPath("userData"), "config.json");
+  private configPath = path.join(
+    app.getPath("userData"),
+    "Config",
+    "config.json",
+  );
 
   getConfigPath() {
     return this.configPath;
@@ -20,15 +25,15 @@ export class ConfigStore {
         ? path.join(
             process.env.ProgramData ?? "C:\\ProgramData",
             "Crownix",
-            "StudentManagement",
+            "Student Management System Desktop",
           )
         : path.join(app.getPath("userData"), "data");
 
     return {
-      version: 1,
+      version: CONFIG_VERSION,
       mode: "client",
       port: 3223,
-      databasePath: path.join(dataRoot, "database", "student-management.db"),
+      databasePath: path.join(dataRoot, "database", DATABASE_FILENAME),
       backupDirectory: path.join(dataRoot, "backups"),
       maxBackups: 5,
       lastBackupAt: null,
@@ -40,7 +45,7 @@ export class ConfigStore {
 
     const config = value as Partial<AppConfig>;
 
-    if (config.version !== 1) return null;
+    if (config.version !== CONFIG_VERSION) return null;
 
     if (config.mode !== "server" && config.mode !== "client") {
       return null;
@@ -78,7 +83,7 @@ export class ConfigStore {
     }
 
     return {
-      version: 1,
+      version: CONFIG_VERSION,
       mode: config.mode,
       port: config.port,
       databasePath: path.resolve(config.databasePath),
