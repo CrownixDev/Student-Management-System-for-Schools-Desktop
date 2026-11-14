@@ -10,14 +10,22 @@ import {
   SidebarListItemTitle,
 } from "./page/sidebar-list-item";
 import {
+  CircleQuestionMarkIcon,
   DatabaseIcon,
   FileTextIcon,
   LucideIcon,
+  RefreshCcwIcon,
   ServerIcon,
   SettingsIcon,
 } from "lucide-react";
 
-export type SidebarItem = "server" | "log" | "database" | "settings";
+export type SidebarItem =
+  | "server"
+  | "log"
+  | "database"
+  | "settings"
+  | "update"
+  | "help";
 
 export default function AppSidebar({
   value,
@@ -31,6 +39,8 @@ export default function AppSidebar({
     { icon: FileTextIcon, label: "Logs", value: "log" },
     { icon: DatabaseIcon, label: "Database", value: "database" },
     { icon: SettingsIcon, label: "Settings", value: "settings" },
+    { icon: RefreshCcwIcon, label: "Update", value: "update" },
+    { icon: CircleQuestionMarkIcon, label: "Help", value: "help" },
   ] satisfies { icon: LucideIcon; label: string; value: SidebarItem }[];
 
   return (

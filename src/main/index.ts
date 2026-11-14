@@ -274,6 +274,8 @@ if (!gotSingleInstanceLock) {
     );
     registerStorageIPC(manager, configStore, prismaRunner);
     registerServerStatusListener(manager);
+    registerUpdateIPC();
+
     createApplicationMenu();
 
     // Server mode opens the manager as its primary window.

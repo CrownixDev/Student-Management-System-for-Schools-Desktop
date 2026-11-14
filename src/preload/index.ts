@@ -57,6 +57,11 @@ const api = {
     setMode: (mode: string) =>
       ipcRenderer.invoke(IPC_NAMES.settings.setMode, mode),
   },
+
+  update: {
+    check: () => ipcRenderer.invoke(IPC_NAMES.update.check),
+    openRelease: () => ipcRenderer.invoke(IPC_NAMES.update.openRelease),
+  },
 };
 
 contextBridge.exposeInMainWorld("api", api);

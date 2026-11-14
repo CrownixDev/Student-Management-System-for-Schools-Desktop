@@ -6,6 +6,8 @@ import ServerPage from "./pages/server";
 import LogsPage from "./pages/logs";
 import DatabasePage from "./pages/database";
 import SettingsPage from "./pages/settings";
+import UpdatePage from "./pages/update";
+import HelpPage from "./pages/help";
 
 function App(): React.JSX.Element {
   const [sidebarItem, setSidebarItem] = useState<SidebarItem>("server");
@@ -20,6 +22,10 @@ function App(): React.JSX.Element {
         return <DatabasePage />;
       case "settings":
         return <SettingsPage />;
+      case "update":
+        return <UpdatePage />;
+      case "help":
+        return <HelpPage />;
 
       default:
         <ServerPage />;

@@ -1,5 +1,10 @@
-import { AppMode, ServerStatus, StorageInfo, ServerInfo } from "@/types";
-import { ServerLog } from "@/types/server-log";
+import {
+  AppMode,
+  ServerStatus,
+  StorageInfo,
+  ServerInfo,
+  UpdateCheckResult,
+} from "@/types";
 
 declare global {
   interface Window {
@@ -46,26 +51,11 @@ declare global {
         getMode: () => Promise<AppMode>;
         setMode: (mode: AppMode) => Promise<AppMode>;
       };
-    };
 
-    storage: {
-      getInfo: () => Promise<StorageInfo>;
-
-      selectDatabaseDirectory: () => Promise<{
-        databasePath: string;
-        databaseDirectory: string;
-      } | null>;
-
-      selectBackupDirectory: () => Promise<{
-        backupDirectory: string;
-      } | null>;
-
-      createBackup: () => Promise<{
-        fileName: string;
-        filePath: string;
-        createdAt: string;
-        size: number;
-      }>;
+      update: {
+        check: () => Promise<UpdateCheckResult>;
+        openRelease: () => Promise<void>;
+      };
     };
   }
 }

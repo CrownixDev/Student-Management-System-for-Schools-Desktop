@@ -21,4 +21,8 @@ export const IPC_NAMES = {
     getMode: "settings:get-mode",
     setMode: "settings:set-mode",
   },
+  update: {
+    check: "updates:check",
+    openRelease: "updates:open-release",
+  },
 };
