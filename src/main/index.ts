@@ -26,6 +26,19 @@ import {
   createDailyBackupIfNeeded,
   createMigrationSafetyBackupIfNeeded,
 } from "./services/storage-manager";
+import { registerUpdateIPC } from "./ipc/update-ipc";
+import fs from "node:fs";
+
+// Changing the default userdata path
+const stableUserDataPath = path.join(
+  app.getPath("appData"),
+  "Crownix",
+  "Student Management System Desktop",
+);
+
+fs.mkdirSync(stableUserDataPath, { recursive: true });
+
+app.setPath("userData", stableUserDataPath);
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
