@@ -1,5 +1,9 @@
 import { AppConfig } from "@/types";
-import { CONFIG_VERSION, DATABASE_FILENAME } from "@/constraints";
+import {
+  CONFIG_FILE_NAME,
+  CONFIG_VERSION,
+  DATABASE_FILENAME,
+} from "@/constraints";
 import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -7,7 +11,7 @@ import fs from "node:fs/promises";
 export class ConfigStore {
   private configPath = path.join(
     app.getPath("userData"),
-    "Config",
+    CONFIG_FILE_NAME,
     "config.json",
   );
 
@@ -34,6 +38,7 @@ export class ConfigStore {
       mode: "client",
       port: 3223,
       databasePath: path.join(dataRoot, "database", DATABASE_FILENAME),
+      databaseInitialized: false,
       backupDirectory: path.join(dataRoot, "backups"),
       maxBackups: 5,
       lastBackupAt: null,
@@ -87,6 +92,10 @@ export class ConfigStore {
       mode: config.mode,
       port: config.port,
       databasePath: path.resolve(config.databasePath),
+      databaseInitialized:
+        typeof config.databaseInitialized === "boolean"
+          ? config.databaseInitialized
+          : false,
       backupDirectory: path.resolve(config.backupDirectory),
       maxBackups: config.maxBackups,
       lastBackupAt:

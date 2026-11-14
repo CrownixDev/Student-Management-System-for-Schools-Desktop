@@ -5,6 +5,7 @@ export interface AppConfig {
   mode: AppMode;
   port: number;
   databasePath: string;
+  databaseInitialized: boolean;
   backupDirectory: string;
   maxBackups: number;
   lastBackupAt: string | null;

@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import path from "node:path";
+import { protectManagerWindow } from "./window-policy";
 
 let managerWindow: BrowserWindow | null = null;
 
@@ -24,6 +25,8 @@ export function createManagerWindow() {
       sandbox: true,
     },
   });
+
+  protectManagerWindow(managerWindow);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     managerWindow.loadURL(process.env.ELECTRON_RENDERER_URL);

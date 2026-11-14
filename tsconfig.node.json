@@ -7,7 +7,7 @@
     "src/types/**/*",
     "src/constraints/**/*",
     "src/lib/**/*"
-  ],
+, "resources/server/sqlite-check.cjs"  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"],

@@ -1,22 +1,54 @@
 import { ipcMain, BrowserWindow } from "electron";
-import { ServerManager } from "@/main/services/server-manager";
-import { IPC_NAMES } from "@/lib/ipc-names";
-import { getUsableUrls } from "../services/network-info";
+import { MigrationStateStore } from "../services/migration-state-store";
 import { getManagerWindow } from "../windows/manager-window";
+import { prepareForStart } from "..";
+import { RunStateStore } from "../services/run-state-store";
+import { ServerManager } from "@/main/services/server-manager";
+import { getUsableUrls } from "../services/network-info";
+import { PrismaRunner } from "../services/prisma-runner";
+import { IPC_NAMES } from "@/lib/ipc-names";
 import type { ConfigStore } from "../services/config-store";
 import type { AppMode } from "@/types";
 
 export function registerServerIPC(
   serverManager: ServerManager,
-  configStore?: ConfigStore,
+  configStore: ConfigStore,
+  prismaRunner: PrismaRunner,
+  runStateStore: RunStateStore,
+  migrationStateStore: MigrationStateStore,
 ) {
   ipcMain.handle(IPC_NAMES.server.start, async () => {
-    await serverManager.start();
-    return serverManager.getStatus();
+    if (configStore) {
+      const goodToGo = await prepareForStart(
+        serverManager,
+        configStore,
+        prismaRunner,
+        runStateStore,
+        migrationStateStore,
+      );
+      if (goodToGo) {
+        await serverManager.start();
+        return serverManager.getStatus();
+      } else {
+        throw new Error("Server could not start");
+      }
+    } else {
+      throw new Error("Server could not start");
+    }
   });
 
   ipcMain.handle(IPC_NAMES.server.stop, async () => {
-    await serverManager.stop();
+    const wasRunning = serverManager.getStatus() === "running";
+
+    try {
+      await serverManager.stop();
+      if (wasRunning && runStateStore) {
+        await runStateStore.markCleanStop();
+      }
+    } catch (error) {
+      console.error("Server shutdown failed:", error);
+    }
+
     return serverManager.getStatus();
   });
 

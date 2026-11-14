@@ -1,4 +1,5 @@
 import { BrowserWindow } from "electron";
+import { protectSystemWindow } from "./window-policy";
 
 let systemWindow: BrowserWindow | null = null;
 
@@ -24,12 +25,18 @@ export function createSystemWindow(url: string) {
     },
   });
 
+  protectSystemWindow(systemWindow, url);
+
   systemWindow.loadURL(url);
 
   systemWindow.on("closed", () => {
     systemWindow = null;
   });
 
+  return systemWindow;
+}
+
+export function getSystemWindow(): BrowserWindow | null {
   return systemWindow;
 }
 

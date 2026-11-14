@@ -1,9 +1,8 @@
 import { HEALTH_INTERVAL, HEALTH_TIMEOUT } from "@/constraints";
 import { listBackups, pruneBackups } from "./storage-manager";
 import { spawn, type ChildProcess } from "node:child_process";
-import { AppConfig, ServerStatus } from "@/types";
+import { AppConfig, ServerStatus, ServerLog } from "@/types";
 import { randomBytes } from "node:crypto";
-import { ServerLog } from "@/types";
 import { app } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -19,11 +18,26 @@ export class ServerManager {
   private logs: ServerLog[] = [];
   private logListeners = new Set<(log: ServerLog) => void>();
 
-  constructor(config: AppConfig) {
+  private stopRequested = false;
+
+  // Crash recovery properties
+  private recoveryAttempts = 0;
+  private recoveryWindowStartedAt = 0;
+  private readonly maxRecoveryAttempts = 3;
+  private readonly recoveryDelays = [1_000, 3_000, 8_000];
+  private beforeRecovery?: () => Promise<void>;
+  private stabilityTimer: NodeJS.Timeout | null = null;
+
+  constructor(config: AppConfig, beforeRecovery?: () => Promise<void>) {
     this.config = config;
+    this.beforeRecovery = beforeRecovery;
   }
 
-  getConfig() {
+  setBeforeRecovery(fn: () => Promise<void>) {
+    this.beforeRecovery = fn;
+  }
+
+  getConfig(): AppConfig {
     return { ...this.config };
   }
 
@@ -41,6 +55,10 @@ export class ServerManager {
 
   getLocalUrl() {
     return `http://127.0.0.1:${this.config.port}`;
+  }
+
+  getBaseUrl() {
+    return this.getLocalUrl();
   }
 
   getStatus(): ServerStatus {
@@ -79,6 +97,35 @@ export class ServerManager {
     };
   }
 
+  private async waitForExit(
+    child: ChildProcess,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return true;
+    }
+
+    return new Promise((resolve) => {
+      let finished = false;
+
+      const finish = (exited: boolean) => {
+        if (finished) return;
+
+        finished = true;
+        clearTimeout(timer);
+        child.removeListener("exit", onExit);
+
+        resolve(exited);
+      };
+
+      const onExit = () => finish(true);
+
+      const timer = setTimeout(() => finish(false), timeoutMs);
+
+      child.once("exit", onExit);
+    });
+  }
+
   async start(): Promise<void> {
     if (this.status === "running") {
       return;
@@ -88,6 +135,7 @@ export class ServerManager {
       throw new Error(`Cannot start server while it is ${this.status}.`);
     }
 
+    this.stopRequested = false;
     this.setStatus("starting");
 
     try {
@@ -106,7 +154,7 @@ export class ServerManager {
           CROWNIX_INTERNAL_TOKEN: this.internalToken,
         },
 
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
         windowsHide: true,
       });
 
@@ -143,6 +191,7 @@ export class ServerManager {
 
       child.on("error", (error) => {
         console.error("[Server Process Error]", error);
+        this.emitLog("stderr", `Server process error: ${String(error)}`);
 
         if (this.process === child) {
           this.process = null;
@@ -150,7 +199,7 @@ export class ServerManager {
         }
       });
 
-      child.on("exit", () => {
+      child.on("exit", (code, signal) => {
         if (stdoutBuffer.trim()) {
           this.emitLog("stdout", stdoutBuffer);
           stdoutBuffer = "";
@@ -162,8 +211,8 @@ export class ServerManager {
         }
 
         if (this.process === child) {
-          this.process = null;
-          this.setStatus(this.status === "stopping" ? "stopped" : "error");
+          const wasRunning = this.status === "running";
+          this.handleUnexpectedExit(code, signal, wasRunning);
         }
       });
 
@@ -174,6 +223,15 @@ export class ServerManager {
       }
 
       this.setStatus("running");
+
+      // Stable run timer: reset recovery attempts after 2 minutes of stable operation
+      if (this.stabilityTimer) {
+        clearTimeout(this.stabilityTimer);
+      }
+      this.stabilityTimer = setTimeout(() => {
+        this.recoveryAttempts = 0;
+        this.recoveryWindowStartedAt = Date.now();
+      }, 2 * 60_000);
     } catch (error) {
       if (this.process) {
         this.process.kill();
@@ -186,6 +244,74 @@ export class ServerManager {
     }
   }
 
+  private handleUnexpectedExit(
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    wasRunning: boolean,
+  ) {
+    this.process = null;
+
+    if (this.stabilityTimer) {
+      clearTimeout(this.stabilityTimer);
+      this.stabilityTimer = null;
+    }
+
+    if (this.stopRequested) {
+      this.setStatus("stopped");
+      return;
+    }
+
+    this.setStatus("error");
+
+    this.emitLog(
+      "stderr",
+      `Next.js exited unexpectedly. Code: ${code}, signal: ${signal}`,
+    );
+
+    // Do not retry a process that failed during initial startup.
+    if (!wasRunning) return;
+
+    const now = Date.now();
+
+    if (now - this.recoveryWindowStartedAt > 10 * 60_000) {
+      this.recoveryWindowStartedAt = now;
+      this.recoveryAttempts = 0;
+    }
+
+    if (this.recoveryAttempts >= this.maxRecoveryAttempts) {
+      this.emitLog(
+        "stderr",
+        "Automatic recovery limit reached. Manual restart is required.",
+      );
+      return;
+    }
+
+    const delay = this.recoveryDelays[this.recoveryAttempts];
+
+    this.recoveryAttempts += 1;
+
+    this.emitLog(
+      "stdout",
+      `Server recovery attempt ${this.recoveryAttempts} in ${delay / 1000} seconds.`,
+    );
+
+    setTimeout(async () => {
+      if (this.stopRequested || this.process) return;
+
+      try {
+        // Verify SQLite before attempting to restart.
+        await this.beforeRecovery?.();
+
+        await this.start();
+      } catch (error) {
+        this.emitLog(
+          "stderr",
+          `Automatic recovery failed: ${String(error)}`,
+        );
+      }
+    }, delay);
+  }
+
   async stop(): Promise<void> {
     const child = this.process;
 
@@ -194,35 +320,45 @@ export class ServerManager {
       return;
     }
 
+    this.stopRequested = true;
     this.setStatus("stopping");
 
-    await new Promise<void>((resolve, reject) => {
-      const forceKillTimer = setTimeout(() => {
-        if (child.exitCode === null) {
-          child.kill();
-        }
-      }, 5000);
+    if (this.stabilityTimer) {
+      clearTimeout(this.stabilityTimer);
+      this.stabilityTimer = null;
+    }
 
-      child.once("exit", () => {
-        clearTimeout(forceKillTimer);
+    if (child.connected) {
+      try {
+        child.send({
+          type: "CROWNIX_SHUTDOWN",
+        });
+      } catch (err) {
+        console.error("Could not send shutdown IPC message:", err);
+      }
+    }
 
-        if (this.process === child) {
-          this.process = null;
-        }
+    // Give Next.js up to 20 seconds to drain and close gracefully.
+    const exitedGracefully = await this.waitForExit(child, 20_000);
 
-        this.setStatus("stopped");
-        resolve();
-      });
+    if (!exitedGracefully) {
+      this.emitLog(
+        "stderr",
+        "Graceful shutdown timed out. Force terminating the server.",
+      );
 
-      child.once("error", (error) => {
-        clearTimeout(forceKillTimer);
-        reject(error);
-      });
-
-      // Windows process termination.
-      // The operating system releases its database handles.
+      // Last resort only.
       child.kill();
-    });
+
+      const exited = await this.waitForExit(child, 5_000);
+
+      if (!exited) {
+        throw new Error("Could not terminate the Next.js process.");
+      }
+    }
+
+    this.process = null;
+    this.setStatus("stopped");
   }
 
   async restart(): Promise<void> {
@@ -355,5 +491,9 @@ export class ServerManager {
     for (const listener of this.logListeners) {
       listener(log);
     }
+  }
+
+  emitExternalLog(source: "stdout" | "stderr", message: string) {
+    this.emitLog(source, message);
   }
 }

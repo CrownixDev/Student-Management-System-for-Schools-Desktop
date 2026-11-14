@@ -1,0 +1,351 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ENUMS
+enum Gender {
+  male
+  female
+}
+
+enum SubjectCategory {
+  core // Grade 6-11 core subjects
+  ol_basket // Grade 10-11 basket subjects (categories I, II, III)
+  religion
+  al_main
+  al_common
+  other
+}
+
+enum StudentStatus {
+  active
+  left
+}
+
+enum EnrollmentStatus {
+  active
+  completed
+  repeated
+}
+
+enum MarkStatus {
+  present
+  absent
+}
+
+enum UserRole {
+  admin
+  mod
+  class_teacher
+  subject_teacher
+}
+
+enum BatchType {
+  ol
+  al
+}
+
+// Models
+
+model AcademicYear {
+  id String @id @default(uuid())
+
+  name      String   @unique // "2026"
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean  @default(false)
+
+  grades GradeLevel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// O/L | A/L Grouping
+model Batch {
+  id String @id @default(uuid())
+
+  name String    @unique // "2026 A/L" 
+  type BatchType @default(al)
+
+  grades GradeLevel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// School Grade
+model GradeLevel {
+  id             String  @id @default(uuid())
+  academicYearId String
+  batchId        String?
+
+  name String // "Grade 12"
+
+  classes      Class[]
+  exams        Exam[]
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  batch        Batch?       @relation(fields: [batchId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([academicYearId, name])
+}
+
+model Medium {
+  id String @id @default(uuid())
+
+  name String @unique // Sinhala, English
+
+  classSubjects      ClassSubject[]
+  enrollmentSubjects EnrollmentSubject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Subject {
+  id String @id @default(uuid())
+
+  name     String
+  code     String?
+  category SubjectCategory @default(other)
+
+  classSubjects ClassSubject[]
+  examSubjects  ExamSubject[]
+  userSubjects  UserSubject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, category])
+}
+
+model Teacher {
+  id String @id @default(uuid())
+
+  fullName String
+  phone    String?
+  isActive Boolean @default(true)
+
+  classesAsClassTeacher Class[]
+  classSubjects         ClassSubject[]
+  user                  User?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Class {
+  id           String @id @default(uuid())
+  gradeLevelId String
+
+  name      String // "12 T2"
+  teacherId String?
+
+  gradeLevel GradeLevel @relation(fields: [gradeLevelId], references: [id])
+  teacher    Teacher?   @relation(fields: [teacherId], references: [id])
+
+  classSubjects ClassSubject[]
+  enrollments   Enrollment[]
+  userClasses   UserClass[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gradeLevelId, name])
+}
+
+// This will act as a templete for student subject enrollment. 
+model ClassSubject {
+  id String @id @default(uuid())
+
+  classId   String
+  subjectId String
+  mediumId  String
+  teacherId String?
+
+  class   Class    @relation(fields: [classId], references: [id])
+  subject Subject  @relation(fields: [subjectId], references: [id])
+  medium  Medium   @relation(fields: [mediumId], references: [id])
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+
+  enrollmentSubjects EnrollmentSubject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([classId, subjectId])
+}
+
+model Student {
+  id String @id @default(uuid())
+
+  admissionNo   String    @unique
+  fullName      String
+  dob           DateTime?
+  gender        Gender?
+  nic           String?
+  phone         String?
+  address       String?
+  guardianName  String?
+  guardianPhone String?
+
+  status StudentStatus @default(active)
+
+  enrollments Enrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fullName])
+}
+
+// A student in one class for one academic year.
+model Enrollment {
+  id String @id @default(uuid())
+
+  studentId  String
+  classId    String
+  classIndex Int?
+  status     EnrollmentStatus @default(active)
+  joinedOn   DateTime         @default(now())
+  endedOn    DateTime?
+
+  student Student @relation(fields: [studentId], references: [id])
+  class   Class   @relation(fields: [classId], references: [id])
+
+  enrollmentSubjects EnrollmentSubject[]
+  marks              Mark[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([classId, studentId])
+}
+
+// What subjects in which medium a student learn during a acadamic year.
+model EnrollmentSubject {
+  id String @id @default(uuid())
+
+  enrollmentId   String
+  classSubjectId String
+  mediumId       String
+
+  enrollment   Enrollment   @relation(fields: [enrollmentId], references: [id])
+  classSubject ClassSubject @relation(fields: [classSubjectId], references: [id])
+  medium       Medium       @relation(fields: [mediumId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([enrollmentId, classSubjectId])
+}
+
+// EXAMS & MARKS
+
+model Exam {
+  id           String @id @default(uuid())
+  gradeLevelId String
+
+  name String // "1st Term Test"
+
+  gradeLevel   GradeLevel    @relation(fields: [gradeLevelId], references: [id])
+  examSubjects ExamSubject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gradeLevelId, name])
+}
+
+model ExamSubject {
+  id String @id @default(uuid())
+
+  examId        String
+  subjectId     String
+  maxMarks      Float   @default(100)
+  passMark      Float   @default(35)
+  ignoreRanking Boolean @default(false)
+
+  exam    Exam    @relation(fields: [examId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+  marks   Mark[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([examId, subjectId])
+}
+
+model Mark {
+  id            String @id @default(uuid())
+  enrollmentId  String
+  examSubjectId String
+
+  marks  Float?
+  status MarkStatus @default(present)
+
+  enrollment  Enrollment  @relation(fields: [enrollmentId], references: [id])
+  examSubject ExamSubject @relation(fields: [examSubjectId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([enrollmentId, examSubjectId])
+  @@index([enrollmentId])
+  @@index([examSubjectId])
+}
+
+// Other app related things
+
+model User {
+  id String @id @default(uuid())
+
+  username     String   @unique
+  passwordHash String
+  role         UserRole @default(admin)
+  isActive     Boolean  @default(true)
+
+  refreshTokenHash      String? @unique
+  refreshTokenExpiresAt String?
+
+  teacherId String?  @unique // link login to a teacher record
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+
+  userClasses  UserClass[]
+  userSubjects UserSubject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserClass {
+  id      String @id @default(uuid())
+  userId  String
+  classId String
+
+  user  User  @relation(fields: [userId], references: [id])
+  class Class @relation(fields: [classId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserSubject {
+  id        String @id @default(uuid())
+  userId    String
+  subjectId String
+
+  user    User    @relation(fields: [userId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

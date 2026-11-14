@@ -5,9 +5,9 @@ import path from "node:path";
 
 import {
   databaseExists,
-  isSQLiteDatabase,
   listBackups,
   restoreBackup,
+  assertValidSQLiteDatabase,
 } from "./storage-manager";
 import { AppConfig } from "@/types";
 
@@ -22,38 +22,68 @@ export async function ensureDatabase(
 
   const backups = await listBackups(config.backupDirectory);
   const latestBackup = backups[0];
+  const isFirstInstall = !config.databaseInitialized && backups.length === 0;
 
-  const buttons = latestBackup
-    ? ["Restore latest backup", "Locate existing database", "Cancel"]
-    : ["Locate existing database", "Initialize a new database", "Cancel"];
+  let buttons: string[];
+  let detail: string;
+
+  if (isFirstInstall) {
+    buttons = ["Initialize a new database", "Locate existing database", "Cancel"];
+    detail =
+      "No existing database was found. You can initialize a new database or locate an existing database file.";
+  } else if (latestBackup) {
+    buttons = ["Restore latest backup", "Locate existing database", "Cancel"];
+    detail = `The previously configured database is missing.\n\nLatest backup: ${latestBackup.fileName}\n\nYou can restore it or locate an existing database.`;
+  } else {
+    buttons = ["Locate existing database", "Initialize fresh database", "Cancel"];
+    detail =
+      "The previously configured database is missing and no backups were found. You can locate your existing database file, or initialize a fresh database.";
+  }
 
   const messageBoxOptions = {
     type: "warning" as const,
-    title: "Database not found",
+    title: "Database Not Found",
     message: "The configured database could not be found.",
-    detail: latestBackup
-      ? `Latest backup: ${latestBackup.fileName}\n\nYou can restore it or locate an existing database.`
-      : "No backups were found. You can locate an existing database or initialize a new one.",
+    detail,
     buttons,
     defaultId: 0,
     cancelId: buttons.length - 1,
     noLink: true,
   };
+
   const result = parentWindow
     ? await dialog.showMessageBox(parentWindow, messageBoxOptions)
     : await dialog.showMessageBox(messageBoxOptions);
 
-  if (latestBackup && result.response === 0) {
-    await restoreBackup(latestBackup.filePath, config.databasePath);
+  const selectedButton = buttons[result.response];
 
-    return config;
+  if (selectedButton === "Restore latest backup" && latestBackup) {
+    try {
+      await restoreBackup(latestBackup.filePath, config.databasePath);
+      await assertValidSQLiteDatabase(config.databasePath);
+
+      return await configStore.update(config, {
+        databaseInitialized: true,
+      });
+    } catch (err: unknown) {
+      const errorOptions = {
+        type: "error" as const,
+        title: "Restore Failed",
+        message: "Failed to restore database from backup.",
+        detail: String(err),
+      };
+      if (parentWindow) {
+        await dialog.showMessageBox(parentWindow, errorOptions);
+      } else {
+        await dialog.showMessageBox(errorOptions);
+      }
+      return null;
+    }
   }
 
-  const locateIndex = latestBackup ? 1 : 0;
-
-  if (result.response === locateIndex) {
+  if (selectedButton === "Locate existing database") {
     const openDialogOptions = {
-      title: "Select Student Management Database",
+      title: "Select Student Management Database File",
       properties: ["openFile" as const],
       filters: [
         {
@@ -62,6 +92,7 @@ export async function ensureDatabase(
         },
       ],
     };
+
     const selected = parentWindow
       ? await dialog.showOpenDialog(parentWindow, openDialogOptions)
       : await dialog.showOpenDialog(openDialogOptions);
@@ -72,11 +103,14 @@ export async function ensureDatabase(
 
     const selectedPath = selected.filePaths[0];
 
-    if (!(await isSQLiteDatabase(selectedPath))) {
+    try {
+      await assertValidSQLiteDatabase(selectedPath);
+    } catch (err: unknown) {
       const errorOptions = {
         type: "error" as const,
-        title: "Invalid database",
+        title: "Invalid Database",
         message: "The selected file is not a valid SQLite database.",
+        detail: String(err),
       };
       if (parentWindow) {
         await dialog.showMessageBox(parentWindow, errorOptions);
@@ -87,17 +121,50 @@ export async function ensureDatabase(
       return null;
     }
 
-    return configStore.update(config, {
+    return await configStore.update(config, {
       databasePath: selectedPath,
+      databaseInitialized: true,
     });
   }
 
-  // The new database option is only available when no backup exists.
-  if (!latestBackup && result.response === 1) {
+  if (
+    selectedButton === "Initialize a new database" ||
+    selectedButton === "Initialize fresh database"
+  ) {
+    if (config.databaseInitialized) {
+      // Confirm intentional reset
+      const confirmResult = parentWindow
+        ? await dialog.showMessageBox(parentWindow, {
+            type: "question",
+            title: "Confirm Fresh Database Initialization",
+            message:
+              "Are you sure you want to initialize a fresh database? Any previous data that was not backed up will be lost.",
+            buttons: ["Initialize Fresh Database", "Cancel"],
+            defaultId: 1,
+            cancelId: 1,
+            noLink: true,
+          })
+        : await dialog.showMessageBox({
+            type: "question",
+            title: "Confirm Fresh Database Initialization",
+            message:
+              "Are you sure you want to initialize a fresh database? Any previous data that was not backed up will be lost.",
+            buttons: ["Initialize Fresh Database", "Cancel"],
+            defaultId: 1,
+            cancelId: 1,
+            noLink: true,
+          });
+
+      if (confirmResult.response !== 0) {
+        return null;
+      }
+    }
+
     await fs.mkdir(path.dirname(config.databasePath), { recursive: true });
 
-    // The actual database is created by your Prisma migrations.
-    return config;
+    return await configStore.update(config, {
+      databaseInitialized: true,
+    });
   }
 
   return null;

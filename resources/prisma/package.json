@@ -1,0 +1,8 @@
+{
+  "name": "crownix-prisma-runtime",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "prisma": "7.10.0"
+  }
+}
