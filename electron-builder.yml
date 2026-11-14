@@ -36,6 +36,9 @@ nsis:
   allowElevation: true
   allowToChangeInstallationDirectory: false
 
+  menuCategory: Crownix
+  include: build/installer.nsh
+
   createDesktopShortcut: always
   createStartMenuShortcut: true
 
