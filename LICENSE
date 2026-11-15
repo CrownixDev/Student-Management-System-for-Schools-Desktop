@@ -1,0 +1,89 @@
+Crownix Source-Available License
+Version 1.1
+
+Copyright (c) 2026 Crownix
+All rights reserved.
+
+1. PURPOSE
+
+This software ("Student Management System for Schools Desktop") is provided as source-available for the purpose
+of transparency, security review, and trust building.
+
+This license is not an open-source license as defined by the Open Source
+Initiative (OSI).
+
+Public access to the source code does not grant rights to modify, redistribute,
+or reuse the software beyond the permissions explicitly stated below.
+
+2. PERMISSIONS
+
+You are permitted to:
+
+- View, read, and review the source code for transparency and security auditing
+- Download, build, and run the software for personal, non-commercial use only
+- Submit bug reports, issues, or pull requests to the official repository
+
+No other rights are granted.
+
+3. RESTRICTIONS
+
+You are NOT permitted to:
+
+- Modify the source code and distribute modified versions, publicly or privately
+- Redistribute the source code, compiled binaries, or installers in any form
+- Sell, sublicense, rent, lease, or commercially exploit the software or its derivatives
+- Rebrand, repackage, or incorporate any portion of the codebase into another product or service
+- Create derivative works based on this software without express written permission
+- Use this software or its codebase to build a competing or similar product
+
+Any use outside the permitted scope is strictly prohibited.
+
+4. OFFICIAL DISTRIBUTION
+
+Official releases and compiled binaries are distributed exclusively by Crownix.
+Third-party hosting, mirroring, or redistribution of compiled binaries, installers,
+or packaged executables is strictly prohibited.
+
+5. NO WARRANTY
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. THE SOFTWARE MAY CONTAIN BUGS,
+ERRORS, OR SECURITY LIMITATIONS.
+
+6. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, OR CONTRIBUTORS BE LIABLE FOR
+ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT,
+OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE, INCLUDING BUT NOT LIMITED TO:
+
+- DATA LOSS, CORRUPTION, OR INACCESSIBILITY
+- SYSTEM DOWNTIME OR OPERATIONAL INTERRUPTION
+- SECURITY BREACHES CAUSED BY USER ENVIRONMENT OR THIRD-PARTY INFRASTRUCTURE
+- MISUSE, UNAUTHORIZED MODIFICATION, OR MISCONFIGURATION OF THE SOFTWARE
+
+7. USER DATA & SECURITY RESPONSIBILITY
+
+The user is solely responsible for:
+
+- Maintaining regular backups of their local or hosted data
+- Protecting credentials, encryption keys, and access tokens
+- Ensuring the security and integrity of their host operating system and network
+
+Crownix is not responsible for lost, corrupted, or compromised user data under
+any circumstances.
+
+8. TERMINATION
+
+Any violation of the terms of this license automatically and immediately
+terminates all permissions granted to you under this license. Upon termination,
+you must destroy all copies of the software in your possession.
+
+9. COMMERCIAL & CUSTOM LICENSING
+
+For permissions beyond the scope of this license (including commercial deployment,
+custom modifications, or redistribution rights), please contact:
+
+Crownix
+https://github.com/CrownixDev
