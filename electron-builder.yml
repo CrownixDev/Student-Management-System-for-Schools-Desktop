@@ -51,4 +51,4 @@ nsis:
   installerIcon: build/installerIcon.ico
   uninstallerIcon: build/uninstallerIcon.ico
 
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: Crownix-SMS-${version}-setup.${ext}
